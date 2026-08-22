@@ -9946,7 +9946,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
 
             usdtActiveAmount = amt;
             usdtActiveNetwork = netInp;
-            usdtSecondsLeft = 300; // 5 minutes
+            usdtSecondsLeft = 900; // overwritten by the order's real TTL below
 
             // Show central loading overlay while initializing HD key pair
             const spinner = document.getElementById('usdt-spinner-overlay');
@@ -9977,6 +9977,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                     usdtActiveOrderId = data.orderId;
                     usdtActiveAddress = data.tempAddress;
                     usdtMasterWallet = data.masterWallet;
+                    if (Number(data.expiresInSeconds) > 0) usdtSecondsLeft = Number(data.expiresInSeconds);
 
                     const addrEl = document.getElementById('usdt-temp-address');
                     if (addrEl) addrEl.innerText = usdtActiveAddress;
@@ -10079,24 +10080,6 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                     console.error("USDT Realtime listener check error:", err);
                 }
             }, 3000); // Poll every 3 seconds
-        }
-
-        function generateTempUsdtAddress(net) {
-            if (net === "TRC20" || net === "TRC-20") {
-                const chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-                let addr = "T";
-                for (let i = 0; i < 33; i++) {
-                    addr += chars[Math.floor(Math.random() * chars.length)];
-                }
-                return addr;
-            } else {
-                const chars = "0123456789abcdefABCDEF";
-                let addr = "0x";
-                for (let i = 0; i < 40; i++) {
-                    addr += chars[Math.floor(Math.random() * chars.length)];
-                }
-                return addr;
-            }
         }
 
         function startUsdtTimer() {
