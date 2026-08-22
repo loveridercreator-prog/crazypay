@@ -9946,7 +9946,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
 
             usdtActiveAmount = amt;
             usdtActiveNetwork = netInp;
-            usdtSecondsLeft = 300; // 5 minutes
+            usdtSecondsLeft = 900; // overwritten by the order's real TTL below
 
             // Show central loading overlay while initializing HD key pair
             const spinner = document.getElementById('usdt-spinner-overlay');
@@ -9960,7 +9960,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
 
             try {
                 const userPhone = (currentUser && currentUser.phone) ? currentUser.phone : "guest";
-                const resp = await fetch('/api/usdt/create_order', {
+                const resp = await fetch('/api/v1/usdt/create-order', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -9977,6 +9977,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                     usdtActiveOrderId = data.orderId;
                     usdtActiveAddress = data.tempAddress;
                     usdtMasterWallet = data.masterWallet;
+                    if (Number(data.expiresInSeconds) > 0) usdtSecondsLeft = Number(data.expiresInSeconds);
 
                     const addrEl = document.getElementById('usdt-temp-address');
                     if (addrEl) addrEl.innerText = usdtActiveAddress;
@@ -10008,13 +10009,12 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
             } catch (err) {
                 if (spinner) spinner.classList.add('hidden');
                 console.error("USDT Order error:", err);
-                // Fallback to local address generation
-                usdtActiveAddress = generateTempUsdtAddress(netInp);
-                usdtMasterWallet = netInp === "TRC20" ? "TL8kCmde6dSuiZGovC5mfmjA94idwRUDE9" : "0x39cbbf2fd2e8d0e197599b7e53155f9468520d13";
-                document.getElementById('usdt-temp-address').innerText = usdtActiveAddress;
-                startUsdtTimer();
+                // No offline fallback: a deposit address must come from the HD
+                // engine, otherwise funds would be sent to an unswept address.
                 hideAllUsdtSubscreens();
-                document.getElementById('usdt-gateway-view').classList.remove('hidden');
+                const failEl = document.getElementById('usdt-failure-msg');
+                if (failEl) failEl.innerHTML = "\u274c Deposit gateway unreachable.<br><span style='font-size:12px; font-weight:normal;'>No deposit address was generated. Please retry in a moment \u2014 do not send funds until an address is shown.</span>";
+                document.getElementById('usdt-failure-view').classList.remove('hidden');
             }
         }
 
@@ -10024,7 +10024,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
             usdtListenerIntervalId = setInterval(async () => {
                 if (!usdtActiveOrderId) return;
                 try {
-                    const res = await fetch(`/api/usdt/check_status?orderId=${orderId}`);
+                    const res = await fetch(`/api/v1/usdt/check-status?orderId=${orderId}`);
                     const data = await res.json();
                     if (data.success && data.status === 'SUCCESS') {
                         // STOP LISTENER & TIMER
@@ -10035,13 +10035,14 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                             usdtTimerId = null;
                         }
 
-                        // Credit user balance
+                        // Credit the exact amount the chain reported (partial deposits included)
                         const rate = typeof usdtRate !== 'undefined' ? usdtRate : 117;
-                        const inrCredited = usdtActiveAmount * rate;
+                        const receivedUsdt = Number((data.receivedAmount != null ? data.receivedAmount : (data.order && data.order.receivedAmount)) || usdtActiveAmount);
+                        const inrCredited = Number(data.inrCredited || (receivedUsdt * rate));
 
                         if (currentUser) {
                             currentUser.balance = (currentUser.balance || 0) + inrCredited;
-                            currentUser.usdtBalance = (currentUser.usdtBalance || 0) + usdtActiveAmount;
+                            currentUser.usdtBalance = (currentUser.usdtBalance || 0) + receivedUsdt;
                             
                             if (typeof database !== 'undefined' && database) {
                                 const cleanPhone = currentUser.phone ? currentUser.phone.replace(/[^0-9]/g, '') : "guest";
@@ -10060,7 +10061,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                         hideAllUsdtSubscreens();
                         const successMsgEl = document.getElementById('usdt-success-msg');
                         if (successMsgEl) {
-                            successMsgEl.innerHTML = `Your deposit of <strong>₮${usdtActiveAmount.toFixed(2)} USDT</strong> (= <strong>₹${inrCredited.toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong>) on <strong>${usdtActiveNetwork}</strong> was automatically detected on-chain and verified.<br><br>⚡ Funds automatically swept to Master Receiver Wallet: <span class="font-mono text-blue-400 break-all">${usdtMasterWallet}</span>.`;
+                            successMsgEl.innerHTML = `Your deposit of <strong>₮${receivedUsdt.toFixed(2)} USDT</strong> (= <strong>₹${inrCredited.toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong>) on <strong>${usdtActiveNetwork}</strong> was automatically detected on-chain and verified.<br><br>⚡ Funds automatically swept to Master Receiver Wallet: <span class="font-mono text-blue-400 break-all">${usdtMasterWallet}</span>.`;
                         }
                         const txidEl = document.getElementById('usdt-success-txid');
                         if (txidEl) txidEl.innerText = data.txHash || "Web3_Sweep_Confirmed";
@@ -10068,35 +10069,17 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                         document.getElementById('usdt-success-view').classList.remove('hidden');
 
                         if (typeof showOrderResultBanner === 'function') {
-                            showOrderResultBanner(true, "Order Successfully Completed", `₮${usdtActiveAmount.toFixed(2)} USDT deposited & credited successfully.`);
+                            showOrderResultBanner(true, "Order Successfully Completed", `₮${receivedUsdt.toFixed(2)} USDT deposited & credited successfully.`);
                         }
                         if (typeof showNotificationBroadcast === 'function') {
-                            showNotificationBroadcast(`🎉 Payment Successful! ₮${usdtActiveAmount} USDT credited to wallet.`);
+                            showNotificationBroadcast(`🎉 Payment Successful! ₮${receivedUsdt} USDT credited to wallet.`);
                         }
-                        logAdminTelemetry('USDT_SUCCESS_AUTO', `USDT Deposit auto-settled & swept for ${usdtActiveAmount} USDT on ${usdtActiveNetwork}.`);
+                        logAdminTelemetry('USDT_SUCCESS_AUTO', `USDT Deposit auto-settled & swept for ${receivedUsdt} USDT on ${usdtActiveNetwork}.`);
                     }
                 } catch(err) {
                     console.error("USDT Realtime listener check error:", err);
                 }
             }, 3000); // Poll every 3 seconds
-        }
-
-        function generateTempUsdtAddress(net) {
-            if (net === "TRC20" || net === "TRC-20") {
-                const chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-                let addr = "T";
-                for (let i = 0; i < 33; i++) {
-                    addr += chars[Math.floor(Math.random() * chars.length)];
-                }
-                return addr;
-            } else {
-                const chars = "0123456789abcdefABCDEF";
-                let addr = "0x";
-                for (let i = 0; i < 40; i++) {
-                    addr += chars[Math.floor(Math.random() * chars.length)];
-                }
-                return addr;
-            }
         }
 
         function startUsdtTimer() {
@@ -10195,7 +10178,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
             subtitle.innerText = "Scanning ledger blocks...";
             spinner.classList.remove('hidden');
 
-            fetch(`/api/usdt/check_status?orderId=${usdtActiveOrderId}`)
+            fetch(`/api/v1/usdt/check-status?orderId=${usdtActiveOrderId}`)
                 .then(r => r.json())
                 .then(data => {
                     spinner.classList.add('hidden');
@@ -10210,7 +10193,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                             usdtTimerId = null;
                         }
 
-                        const receivedUsdt = data.order.received_amount || usdtActiveAmount;
+                        const receivedUsdt = (data.receivedAmount != null ? data.receivedAmount : (data.order && data.order.receivedAmount)) || usdtActiveAmount;
                         const rate = typeof usdtRate !== 'undefined' ? usdtRate : 117;
                         const inrCredited = data.inrCredited || (receivedUsdt * rate);
 
@@ -10273,7 +10256,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
             subtitle.innerText = "Verifying transaction confirmation with RPC node...";
             spinner.classList.remove('hidden');
 
-            fetch('/api/usdt/simulate_deposit', {
+            fetch('/api/v1/usdt/verify-txhash', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ orderId: usdtActiveOrderId, txHash: txid })
@@ -10289,7 +10272,7 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                             clearInterval(usdtTimerId);
                             usdtTimerId = null;
                         }
-                        const receivedUsdt = data.order.received_amount || usdtActiveAmount;
+                        const receivedUsdt = (data.receivedAmount != null ? data.receivedAmount : (data.order && data.order.receivedAmount)) || usdtActiveAmount;
                         const rate = typeof usdtRate !== 'undefined' ? usdtRate : 117;
                         const inrCredited = data.inrCredited || (receivedUsdt * rate);
 
