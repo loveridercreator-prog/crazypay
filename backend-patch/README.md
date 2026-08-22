@@ -29,3 +29,60 @@ Redeploy to Cloud Run. This project already proxies `/api/*` to that service, so
 
 Paths used: `p2p_orders/{id}`, `users/{uid}/wallet/balance`, `sale_ledger/{uid}`.
 Slot rules live in `SLOT_UNITS` / `MIN_SLOT` at the top of the file.
+
+---
+
+# USDT deposit engine (full rebuild)
+
+Legacy USDT handlers are purged. These four files replace them:
+
+| File | Purpose |
+|---|---|
+| `src/models/usdtSchema.sql` | Drops + recreates `usdt_orders`, `usdt_deposits`, `usdt_sweeps`, HD index sequence |
+| `src/controllers/usdtController.js` | create-order, check-status, verify-txhash |
+| `src/services/usdtSweeperService.js` | HD derivation, chain reads, gas funding, sweeper, 3s listener |
+| `src/routes/usdtRoutes.js` | Express router + Firebase balance crediting |
+
+## Wire up
+
+```sh
+psql "$DATABASE_URL" -f src/models/usdtSchema.sql
+npm i ethers@^6 tronweb@^6 pg express
+```
+
+```js
+const { attachUsdtRoutes } = require('./src/routes/usdtRoutes');
+attachUsdtRoutes(app, admin);   // mounts /api/v1/usdt and starts the workers
+```
+
+## Environment
+
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | Postgres |
+| `USDT_HD_MNEMONIC` | BIP-39 mnemonic deriving every temp address — back it up; losing it loses unswept funds |
+| `BSC_RPC_URL` | default `https://bsc-dataseed.binance.org` |
+| `BSC_MASTER_PRIVATE_KEY` | funds BNB gas, keep a small hot balance |
+| `TRON_FULL_HOST` / `TRON_API_KEY` | TronGrid |
+| `TRON_MASTER_PRIVATE_KEY` | funds TRX gas |
+| `USDT_INR_RATE` | fallback rate when the client sends none |
+| `USDT_ORDER_TTL_MINUTES` | default 15 |
+
+## Endpoints
+
+| Method | Path | Behaviour |
+|---|---|---|
+| POST | `/api/v1/usdt/create-order` | `{ userId, amount, network }` → unique HD temp address (`m/44'/60'` BSC, `m/44'/195'` TRON), QR, TTL, master wallet |
+| GET | `/api/v1/usdt/check-status?orderId=` | Live RPC read on top of the 3s listener. Any non-zero balance credits the **exact** received amount and flips the order to SUCCESS |
+| POST | `/api/v1/usdt/verify-txhash` | `{ orderId, txHash }` → decodes the Transfer log on-chain; amount comes from the log, never the client. `usdt_deposits.tx_hash` unique index blocks reuse (HTTP 409) |
+| GET | `/api/v1/usdt/health` | wallets/contracts probe |
+
+Master receivers: BSC `0x39cbbf2fd2e8d0e197599b7e53155f9468520d13`, TRC20 `TL8kCmde6dSuiZGovC5mfmjA94idwRUDE9`.
+USDT contracts: BSC `0x55d398326f99059fF775485246999027B3197955`, TRC20 `TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`.
+
+## Sweeping
+
+On every credit the order is queued. The worker tops up micro-gas from the master
+wallet (0.0008 BNB / 30 TRX) only when the temp address is short, then transfers
+100% of the USDT balance to the master receiver. Retries up to 5 times, state in
+`usdt_sweeps`.
