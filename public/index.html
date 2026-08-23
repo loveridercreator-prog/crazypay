@@ -3568,10 +3568,12 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                     ref: q,
                     once: (...a) => q.once(...a),
                     on: function (event, cb) {
-                        if (event !== 'value') { window.fbTrack(q); return q.on(event, cb); }
-                        window.fbOnce(q, cb, opts.key || path);
-                        return cb;
+                        // LIVE MODE: always attach a real Realtime Database
+                        // listener so the UI reflects live data instantly.
+                        window.fbTrack(q);
+                        return q.on(event, cb);
                     }
+
                 };
             };
 
