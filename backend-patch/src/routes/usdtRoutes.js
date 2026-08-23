@@ -65,9 +65,14 @@ function makeFirebaseCreditor(admin) {
  * @param {{ startWorkers?: boolean }} [options]
  */
 function attachUsdtRoutes(app, admin, options = {}) {
-  if (admin) controller.setBalanceCreditor(makeFirebaseCreditor(admin));
+  if (admin) {
+    controller.setBalanceCreditor(makeFirebaseCreditor(admin));
+    systemStatus.attachFirebase(admin);
+  }
+  systemStatus.attachPool(svc.pool);
 
   app.use("/api/v1/usdt", express.json({ limit: "256kb" }), router);
+
 
   if (options.startWorkers !== false) {
     svc.startUsdtSweeper(controller.creditOrder);
