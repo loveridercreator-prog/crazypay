@@ -86,3 +86,35 @@ On every credit the order is queued. The worker tops up micro-gas from the maste
 wallet (0.0008 BNB / 30 TRX) only when the temp address is short, then transfers
 100% of the USDT balance to the master receiver. Retries up to 5 times, state in
 `usdt_sweeps`.
+
+## Order Creation Engine (overwrite)
+
+Files (authoritative, replace all legacy order creation):
+- `src/models/orderEngineSchema.sql` — `sellers`, `p2p_orders`, `order_events`,
+  `active_sale_ledger` / `buyer_history_ledger` views, `expire_order_timers()`.
+- `src/services/orderEngineService.js` — data binding, random chunking (2–10),
+  two-stage timers, UPI intent builder, event bus, timer sweeper.
+- `src/controllers/orderEngineController.js` / `src/routes/orderEngineRoutes.js`.
+
+Mount:
+```js
+const { attachOrderEngine } = require('./src/routes/orderEngineRoutes');
+attachOrderEngine(app); // starts the 10s two-stage timer sweeper
+```
+Delete every legacy route: `/api/orders/create`, `/api/withdraw/split`,
+`/api/sell/auto-generate`, `/api/v1/orders/auto-create`.
+
+Endpoints (`/api/v1/orders`):
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/engine/run` | withdrawal engine → random chunked orders |
+| GET  | `/available` | buyer marketplace cards |
+| POST | `/:id/lock` | stage 1, 5-min buy lock |
+| POST | `/:id/confirm` | stage 2, 15-min payment/UTR window |
+| POST | `/:id/settle` | atomic terminal state lock |
+| GET  | `/sale-ledger?seller_id=` | active-only seller ledger |
+| GET  | `/buy-history?buyer_id=` | frozen buyer history |
+| GET  | `/stream` | realtime SSE order state feed |
+
+Frontend: `public/orderEngine.js` (`window.CrazyPayOrderEngine`) and
+`public/upiDeepLinkHandler.js` (`window.CrazyPayUpi.launchUpiPayment`).
