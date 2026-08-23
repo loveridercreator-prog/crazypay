@@ -1,15 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { handleMock } from "@/lib/mock-backend";
-
 const BACKEND_URL =
   "https://ais-dev-qn4foozn3gqijpr4qn5j43-383014714207.asia-southeast1.run.app";
 
 async function proxy({ request }: { request: Request }) {
-  // Mock layer first; returns null (and we fall through to the real backend)
-  // when mocks are disabled or the path isn't mocked.
-  const mocked = await handleMock(request.clone());
-  if (mocked) return mocked;
+  // LIVE MODE: no local mock layer. Every /api/* request goes straight to the
+  // live backend so the preview renders real network data.
+
+
 
 
   const incoming = new URL(request.url);
