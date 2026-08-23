@@ -4,6 +4,8 @@
  */
 
 const svc = require("../services/orderEngineService");
+const systemStatus = require("../services/systemStatusService");
+
 
 const money = svc.money;
 
@@ -53,8 +55,12 @@ function shapeOrder(o) {
 /* -------------------- POST /api/v1/orders/engine/run  (seller withdrawal) */
 exports.runEngine = async (req, res) => {
   try {
+    // Global admin master switch — no new order records while service closed.
+    if (await systemStatus.guard(res)) return;
+
     const sellerId = String(req.body.seller_id || "").trim();
     if (!sellerId) return res.status(400).json({ ok: false, error: "seller_id required" });
+
 
     const out = await svc.runWithdrawalEngine(sellerId, {
       minChunks: Number(req.body.min_chunks) || undefined,

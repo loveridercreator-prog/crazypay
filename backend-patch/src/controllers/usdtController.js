@@ -18,6 +18,8 @@
 
 const crypto = require("crypto");
 const svc = require("../services/usdtSweeperService");
+const systemStatus = require("../services/systemStatusService");
+
 
 const { pool, MASTER_WALLETS } = svc;
 
@@ -167,7 +169,11 @@ async function creditOrder(order, hit) {
 /** POST /api/v1/usdt/create-order  { userId, amount, network } */
 exports.createOrder = async (req, res) => {
   try {
+    // Global admin master switch — refuse new records while service is closed.
+    if (await systemStatus.guard(res)) return;
+
     const userId = String(req.body.userId || req.body.user_id || "").trim();
+
     const amount = Number(req.body.amount);
     const network = svc.normalizeNetwork(req.body.network);
     const rate = Number(req.body.rate) > 0 ? Number(req.body.rate) : DEFAULT_INR_RATE;
