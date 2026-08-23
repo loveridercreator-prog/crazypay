@@ -18,6 +18,8 @@
 
 const crypto = require("crypto");
 const svc = require("../services/usdtSweeperService");
+const systemStatus = require("../services/systemStatusService");
+
 
 const { pool, MASTER_WALLETS } = svc;
 
