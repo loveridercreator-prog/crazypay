@@ -4989,6 +4989,14 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
             // 12. Sync Master Order Creation & Withdrawal Engine Status
             const orderCreationActive = (data.orderCreationEnabled !== undefined) ? (data.orderCreationEnabled !== false) : ((data.withdrawal_engine_open !== undefined) ? (data.withdrawal_engine_open !== false) : true);
             const engineOpen = orderCreationActive;
+
+            // 12b. Global service status (admin master Open/Close switch)
+            const serviceOpen = (data.system_service_status !== undefined)
+                ? (data.system_service_status !== false)
+                : orderCreationActive;
+            if (typeof applyServiceStatus === 'function') applyServiceStatus(serviceOpen);
+
+
             
             const orderCreationBox = document.getElementById('admin-order-creation-toggle');
             if (orderCreationBox) orderCreationBox.checked = orderCreationActive;
