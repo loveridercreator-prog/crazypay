@@ -40,15 +40,18 @@ router.get("/:id", ctrl.getOne);
 
 /**
  * @param {import('express').Express} app
- * @param {{ startSweeper?: boolean, sweepIntervalMs?: number }} [options]
+ * @param {{ startSweeper?: boolean, sweepIntervalMs?: number, admin?: any }} [options]
  */
 function attachOrderEngine(app, options = {}) {
+  if (options.admin) systemStatus.attachFirebase(options.admin);
+  systemStatus.attachPool(svc.pool);
   app.use("/api/v1/orders", router);
   if (options.startSweeper !== false) {
     svc.startTimerSweeper(options.sweepIntervalMs || 10000);
   }
   return router;
 }
+
 
 module.exports = router;
 module.exports.router = router;
