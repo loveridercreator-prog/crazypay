@@ -546,6 +546,9 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                         </button>
                     </div>
 
+                    <!-- GLOBAL SERVICE STATUS BADGE (bound to system_service_status) -->
+                    <div id="service-status-badge-host" data-service-status-badge class="flex justify-center"></div>
+
                     <!-- INVITE & EARN BANNER -->
                     <div class="bg-gradient-to-r from-[#1e6091] to-purple-700 p-4 rounded-3xl text-white shadow-lg space-y-3 relative overflow-hidden text-left">
                         <!-- Decorative background elements -->
@@ -3290,6 +3293,8 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <script src="/upiDeepLinkHandler.js"></script>
     <script src="/orderEngine.js"></script>
+    <script src="/serviceStatus.js"></script>
+
 
 
     <!-- MAIN JAVASCRIPT PROGRAM LOGIC -->
@@ -4987,6 +4992,14 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
             // 12. Sync Master Order Creation & Withdrawal Engine Status
             const orderCreationActive = (data.orderCreationEnabled !== undefined) ? (data.orderCreationEnabled !== false) : ((data.withdrawal_engine_open !== undefined) ? (data.withdrawal_engine_open !== false) : true);
             const engineOpen = orderCreationActive;
+
+            // 12b. Global service status (admin master Open/Close switch)
+            const serviceOpen = (data.system_service_status !== undefined)
+                ? (data.system_service_status !== false)
+                : orderCreationActive;
+            if (typeof applyServiceStatus === 'function') applyServiceStatus(serviceOpen);
+
+
             
             const orderCreationBox = document.getElementById('admin-order-creation-toggle');
             if (orderCreationBox) orderCreationBox.checked = orderCreationActive;
@@ -5130,6 +5143,8 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                         rewardPercent: 11.0,
                         reward_ratio: 11.0,
                         withdrawal_engine_open: true,
+                        system_service_status: true,
+
                         disable_engine_penalty: true,
                         commissionLevelA: 3.0,
                         commissionLevelB: 2.0,
@@ -11172,22 +11187,11 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                     });
                 });
             } else {
-                if (userUpiHandles.length > 0) {
-                    userUpiHandles[0] = { ...userUpiHandles[0], ...upiData };
-                } else {
-                    const mockKey1 = 'local_' + Math.random().toString(36).substring(2, 9);
-                    userUpiHandles.push({ ...upiData, key: mockKey1 });
-                }
-                currentUser.engineStatus = "ON";
-                currentUser.engineOffUntil = 0;
-                currentUser.upiBreakCount = 0;
-                currentUser.hardStopLocked = false;
-
-                renderUpiList();
-                closeLinkUpiModal();
-                updateWithdrawalEngineCardUI();
-                showNotificationBroadcast(`🎉 ${selectedUpiPartnerName} Channel Linked & Auto-Overridden! Engine reactivated & order creation restarted instantly!`);
+                // PRODUCTION: no live database connection => no local/mock state.
+                showNotificationBroadcast("⚠️ Database unavailable. UPI channel was not linked. Please retry.");
+                return;
             }
+
 
             logAdminTelemetry('UPI_LINK_OVERRIDE', `Bound/Overrode UPI VPA: ${upiIdVal} (${merchantName})`);
         }
@@ -12138,18 +12142,24 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                 window.systemConfig.orderCreationEnabled = active;
                 window.systemConfig.withdrawal_engine_open = active;
                 window.systemConfig.backend_controller_active = active;
-                
+                window.systemConfig.system_service_status = active;
+
                 if (typeof Backend_Controller !== 'undefined') {
                     Backend_Controller.active = active;
                 }
+
+                // Instant local re-render, before the database round-trip returns.
+                if (typeof applyServiceStatus === 'function') applyServiceStatus(active);
 
                 if (database) {
                     database.ref('system_config').update({
                         orderCreationEnabled: active,
                         withdrawal_engine_open: active,
-                        backend_controller_active: active
+                        backend_controller_active: active,
+                        system_service_status: active
                     }).catch(e => console.warn('Database config update error:', e));
                 }
+
 
                 // Call Backend API to enforce PostgreSQL / Redis Cache Lock
                 await fetch('/api/toggle_master_switch', {
