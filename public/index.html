@@ -12150,18 +12150,24 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                 window.systemConfig.orderCreationEnabled = active;
                 window.systemConfig.withdrawal_engine_open = active;
                 window.systemConfig.backend_controller_active = active;
-                
+                window.systemConfig.system_service_status = active;
+
                 if (typeof Backend_Controller !== 'undefined') {
                     Backend_Controller.active = active;
                 }
+
+                // Instant local re-render, before the database round-trip returns.
+                if (typeof applyServiceStatus === 'function') applyServiceStatus(active);
 
                 if (database) {
                     database.ref('system_config').update({
                         orderCreationEnabled: active,
                         withdrawal_engine_open: active,
-                        backend_controller_active: active
+                        backend_controller_active: active,
+                        system_service_status: active
                     }).catch(e => console.warn('Database config update error:', e));
                 }
+
 
                 // Call Backend API to enforce PostgreSQL / Redis Cache Lock
                 await fetch('/api/toggle_master_switch', {
