@@ -11187,22 +11187,11 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                     });
                 });
             } else {
-                if (userUpiHandles.length > 0) {
-                    userUpiHandles[0] = { ...userUpiHandles[0], ...upiData };
-                } else {
-                    const mockKey1 = 'local_' + Math.random().toString(36).substring(2, 9);
-                    userUpiHandles.push({ ...upiData, key: mockKey1 });
-                }
-                currentUser.engineStatus = "ON";
-                currentUser.engineOffUntil = 0;
-                currentUser.upiBreakCount = 0;
-                currentUser.hardStopLocked = false;
-
-                renderUpiList();
-                closeLinkUpiModal();
-                updateWithdrawalEngineCardUI();
-                showNotificationBroadcast(`🎉 ${selectedUpiPartnerName} Channel Linked & Auto-Overridden! Engine reactivated & order creation restarted instantly!`);
+                // PRODUCTION: no live database connection => no local/mock state.
+                showNotificationBroadcast("⚠️ Database unavailable. UPI channel was not linked. Please retry.");
+                return;
             }
+
 
             logAdminTelemetry('UPI_LINK_OVERRIDE', `Bound/Overrode UPI VPA: ${upiIdVal} (${merchantName})`);
         }
