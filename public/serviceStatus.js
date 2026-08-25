@@ -15,6 +15,7 @@
 
   var STATE_KEY = "SYSTEM_SERVICE_STATUS";
   window[STATE_KEY] = true;
+  var listenerBound = false;
 
   /* Selectors of transaction actions gated by the master switch. */
   var ACTION_SELECTORS = [
@@ -49,6 +50,9 @@
       if (fallback) hosts = [fallback];
     }
     Array.prototype.forEach.call(hosts, function (host) {
+      var state = offline ? "offline" : "online";
+      if (host.dataset.serviceBadgeState === state) return;
+      host.dataset.serviceBadgeState = state;
       host.innerHTML = offline
         ? '<span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-rose-500/20 text-rose-400 border border-rose-500/30 inline-flex items-center gap-1">' +
           '<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Service Offline</span>'
@@ -102,10 +106,12 @@
 
   /* Attach the realtime listener as soon as Firebase is ready. */
   function bind() {
+    if (listenerBound) return true;
     var db = window.database || (window.firebase && window.firebase.apps && window.firebase.apps.length
       ? window.firebase.database()
       : null);
     if (!db) return false;
+    listenerBound = true;
     db.ref("system_config/system_service_status").on(
       "value",
       function (snap) {
