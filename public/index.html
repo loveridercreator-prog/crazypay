@@ -3501,11 +3501,19 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                 if (typeof proto.on === 'function') {
                     const originalOn = proto.on;
                     proto.on = function(eventType, callback, cancelCallbackOrContext, context) {
-                        let safeCancelCallback = typeof cancelCallbackOrContext === 'function' ? cancelCallbackOrContext : function(err) {
+                        const hasCancelCallback = typeof cancelCallbackOrContext === 'function';
+                        const safeCancelCallback = hasCancelCallback ? cancelCallbackOrContext : function(err) {
                             console.warn(`[Firebase Safe Guard] Listener for ${eventType} was cancelled/failed:`, err);
                         };
                         try {
-                            return originalOn.call(this, eventType, callback, safeCancelCallback, context || cancelCallbackOrContext);
+                            if (hasCancelCallback) {
+                                return context === undefined
+                                    ? originalOn.call(this, eventType, callback, safeCancelCallback)
+                                    : originalOn.call(this, eventType, callback, safeCancelCallback, context);
+                            }
+                            return cancelCallbackOrContext === undefined
+                                ? originalOn.call(this, eventType, callback, safeCancelCallback)
+                                : originalOn.call(this, eventType, callback, safeCancelCallback, cancelCallbackOrContext);
                         } catch (err) {
                             console.warn(`[Firebase Safe Guard] Exception when setting up event listener for ${eventType}:`, err);
                         }

@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { handleLivePaymentApi } from "@/lib/live-payment-api";
 
 const BACKEND_URL =
   "https://ais-dev-qn4foozn3gqijpr4qn5j43-383014714207.asia-southeast1.run.app";
 
 async function proxy({ request }: { request: Request }) {
-  // LIVE MODE: no local mock layer. Every /api/* request goes straight to the
-  // live backend so the preview renders real network data.
-
-
-
+  // Keep critical payment reads and verification against the live RTDB while
+  // the separately hosted processing service is unavailable.
+  const liveResponse = await handleLivePaymentApi(request.clone());
+  if (liveResponse) return liveResponse;
 
   const incoming = new URL(request.url);
   const target = new URL(
@@ -27,6 +27,14 @@ async function proxy({ request }: { request: Request }) {
       ? null
       : new Uint8Array(await request.arrayBuffer()),
   });
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/html") && incoming.pathname.startsWith("/api/")) {
+    return Response.json(
+      { ok: false, success: false, error: "Live backend is unavailable" },
+      { status: 503, headers: { "cache-control": "no-store" } },
+    );
+  }
 
 
   const outHeaders = new Headers(response.headers);
