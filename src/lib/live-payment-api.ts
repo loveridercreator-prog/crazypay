@@ -3,7 +3,60 @@ const DATABASE_URL =
 
 type JsonRecord = Record<string, unknown>;
 
-const json = (body: unknown, status = 200) =>
+/** Strongly-typed API response payloads shared across handlers. */
+interface ApiOk<T extends Record<string, unknown>> extends Record<string, unknown> {
+  ok: true;
+  data?: T;
+}
+interface ApiError extends Record<string, unknown> {
+  ok: false;
+  error: string;
+}
+interface AutoUtrOrderResponse extends Record<string, unknown> {
+  ok: boolean;
+  order_id: string;
+  base_amount: number;
+  discount_paisa: number;
+  payable_amount: number;
+  status: "PENDING" | "SUCCESS" | "FAILED";
+  retry_count: number;
+  expires_at: string;
+  expires_in_seconds: number;
+}
+interface VerifyUtrResponse extends Record<string, unknown> {
+  ok: boolean;
+  status: "PENDING" | "SUCCESS" | "FAILED";
+  order_id?: string;
+  utr_number?: string;
+  credited_amount?: number;
+  retry_count?: number;
+  can_retry?: boolean;
+  title?: string;
+  message?: string;
+  idempotent?: boolean;
+  error?: string;
+}
+interface UsdtStatusResponse extends Record<string, unknown> {
+  success: boolean;
+  status?: string;
+  receivedAmount?: number;
+  inrCredited?: number;
+  txHash?: string | null;
+  order?: {
+    orderId: string;
+    network?: string;
+    tempAddress?: string;
+    masterWallet?: string;
+    expectedAmount: number;
+    receivedAmount: number;
+    status?: string;
+    txHash?: string | null;
+    expiresAt?: string | number;
+  };
+  error?: string;
+}
+
+const json = (body: ApiOk<Record<string, unknown>> | ApiError | AutoUtrOrderResponse | VerifyUtrResponse | UsdtStatusResponse | Record<string, unknown>, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
 async function readNode<T>(path: string): Promise<T | null> {
