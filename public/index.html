@@ -64,8 +64,6 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
     </script>
     <!-- FontAwesome Icons for Beautiful Visuals -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Socket.io Client Library -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         html, body {
             overflow: hidden !important;
@@ -17500,61 +17498,6 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
                 adminView.classList.add('hidden');
             }
             if (typeof syncAdminHeaderVisibility === 'function') syncAdminHeaderVisibility();
-        }
-
-        // ==========================================
-        // SOCKET.IO LIVE SYNC GATEWAY LOGIC
-        // ==========================================
-        const socket = io(getBackendUrl());
-
-        // Handle connection states
-        socket.on('connect', () => {
-            console.log("[SOCKET] Connected to Live Sync Server");
-            const statusEl = document.getElementById('home-status');
-            if (statusEl) {
-                statusEl.innerText = "ऑनलाइन (लाइव)";
-                statusEl.className = "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest";
-            }
-        });
-
-        socket.on('disconnect', () => {
-            console.warn("[SOCKET] Disconnected from Live Sync Server");
-            const statusEl = document.getElementById('home-status');
-            if (statusEl) {
-                statusEl.innerText = "कनेक्टिंग...";
-                statusEl.className = "bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse";
-            }
-        });
-
-        // Receive live status/notice/active miners updates from server
-        socket.on('STATE_SYNC', (state) => {
-            console.log("[SOCKET] Received STATE_SYNC:", state);
-            
-            // Sync Live status text
-            const noticeEl = document.getElementById('live-notice');
-            if (noticeEl) {
-                noticeEl.innerText = "नोटिस: " + (state.homeNotice || "कोई नया अपडेट नहीं है।");
-            }
-            
-            // Sync Active miners count
-            const minerCountEl = document.getElementById('miner-count');
-            if (minerCountEl) {
-                minerCountEl.innerText = state.activeMiners ?? 0;
-            }
-        });
-
-        // Emit UPI Test Payment Signal
-        function triggerUpiPayment(amt) {
-            console.log(`[SOCKET] Triggering Live UPI Payment simulation: ₹${amt}`);
-            showNotificationBroadcast(`💸 UPI Test Triggered: ₹${amt}`);
-            socket.emit('BUY_UPI_PAYMENT', { amount: amt });
-        }
-
-        // Emit Mining Pool Signal
-        function triggerMining() {
-            console.log("[SOCKET] Triggering Mining Power Boost signal");
-            showNotificationBroadcast("⛏️ Mining Power Boosted! Miner count increased.");
-            socket.emit('START_MINING');
         }
 
         // =========================================================================
