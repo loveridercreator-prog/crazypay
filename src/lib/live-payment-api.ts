@@ -296,6 +296,8 @@ export async function handleLivePaymentApi(request: Request): Promise<Response |
     if (request.method === "POST" && path === "/api/v1/orders/verify-utr") return verifyUtr(request);
     if (request.method === "GET" && path === "/api/v1/usdt/check-status") return usdtStatus(url);
     if (request.method === "GET" && path === "/api/v1/orders/available") return availableOrders();
+    if (request.method === "GET" && path === "/api/verify_event_status") return verifyEventStatus(url);
+
     return null;
   } catch (error) {
     console.error("[live-payment-api]", error);
