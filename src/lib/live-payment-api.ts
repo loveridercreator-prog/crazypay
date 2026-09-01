@@ -141,8 +141,10 @@ async function createAutoUtrOrder(request: Request) {
   const random = new Uint32Array(1);
   crypto.getRandomValues(random);
   const randomValue = random.at(0) ?? 0;
-  const discountPaisa = available.at(randomValue % available.length);
-  if (discountPaisa === undefined) return json({ ok: false, error: "Unable to allocate a payment slot." }, 503);
+  const slot = available.at(randomValue % available.length);
+  if (slot === undefined) return json({ ok: false, error: "Unable to allocate a payment slot." }, 503);
+  const discountPaisa = slot ?? 0;
+  if (discountPaisa === 0) return json({ ok: false, error: "Unable to allocate a payment slot." }, 503);
   const orderId = `UTR-${now.toString(36).toUpperCase()}-${randomValue.toString(16).slice(-6).toUpperCase()}`;
   const payableAmount = Number((baseAmount - discountPaisa / 100).toFixed(2));
   const expiresAt = now + 15 * 60 * 1000;
