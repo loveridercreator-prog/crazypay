@@ -259,6 +259,34 @@ async function availableOrders() {
   return json({ ok: true, orders: active });
 }
 
+interface VerifyEventStatusResponse extends Record<string, unknown> {
+  success: boolean;
+  task1_upi_bound: boolean;
+  task2_order_placed: boolean;
+  task3_joined_group: boolean;
+  task4_subscribed_channel: boolean;
+}
+
+async function verifyEventStatus(url: URL) {
+  const phone = (url.searchParams.get("phone") ?? "").replace(/[^0-9]/g, "");
+  if (!phone) {
+    return json({ ok: false, error: "phone required" } satisfies ApiError, 400);
+  }
+
+  const user = await readNode<JsonRecord>(`users/${phone}`);
+  const truthy = (value: unknown) => value === true || value === "true" || value === 1;
+
+  const payload: VerifyEventStatusResponse = {
+    success: true,
+    task1_upi_bound: truthy(user?.['task1_upi_bound'] ?? user?.['upiBound']),
+    task2_order_placed: truthy(user?.['task2_order_placed'] ?? user?.['orderPlaced']),
+    task3_joined_group: truthy(user?.['task3_joined_group'] ?? user?.['joinedTelegramGroup']),
+    task4_subscribed_channel: truthy(user?.['task4_subscribed_channel'] ?? user?.['subscribedSecretTrading']),
+  };
+  return json(payload);
+}
+
+
 export async function handleLivePaymentApi(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "");
