@@ -18331,5 +18331,22 @@ function launchUPIIntent(upiId, name, amount, orderId, gateway) {
 
 
     </script>
+<script>
+// Global image fallback: never show a broken-image icon for logo images.
+window.addEventListener('error', function (e) {
+  var t = e.target;
+  if (!t || t.tagName !== 'IMG') return;
+  if (!/logo|__l5e|ibb\.co/i.test(t.src || '')) return;
+  var size = Math.max(t.width || 40, 24);
+  var fallback = document.createElement('div');
+  fallback.style.cssText = 'width:' + t.style.width + ';height:' + t.style.height +
+    ';min-width:24px;min-height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;' +
+    'background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;font-weight:700;font-size:' + Math.round(size/3) + 'px;' +
+    'box-shadow:0 4px 12px rgba(0,0,0,.18);flex-shrink:0;user-select:none;';
+  fallback.textContent = 'CP';
+  fallback.setAttribute('aria-label', t.alt || 'Crazy Pay Logo');
+  t.replaceWith(fallback);
+}, true);
+</script>
 </body>
 </html>
