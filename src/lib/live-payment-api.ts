@@ -371,6 +371,7 @@ export async function handleLivePaymentApi(request: Request): Promise<Response |
     if (request.method === "POST" && path === "/api/payments/initiate") return initiatePayment(request);
     if (request.method === "POST" && path === "/api/v1/orders/auto-create") return createAutoUtrOrder(request);
     if (request.method === "POST" && path === "/api/v1/orders/verify-utr") return verifyUtr(request);
+    if (request.method === "POST" && path === "/api/v1/usdt/create-order") return usdtCreateOrder(request);
     if (request.method === "GET" && path === "/api/v1/usdt/check-status") return usdtStatus(url);
     if (request.method === "GET" && path === "/api/v1/orders/available") return availableOrders();
     if (request.method === "GET" && path === "/api/verify_event_status") return verifyEventStatus(url);
