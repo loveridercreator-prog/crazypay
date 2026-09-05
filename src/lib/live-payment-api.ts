@@ -226,7 +226,84 @@ async function verifyUtr(request: Request) {
   });
 }
 
+const MASTER_WALLETS: Record<string, string> = {
+  BEP20: "0x39cbbf2fd2e8d0e197599b7e53155f9468520d13",
+  TRC20: "TL8kCmde6dSuiZGovC5mfmjA94idwRUDE9",
+};
+
+interface UsdtCreateOrderResponse extends Record<string, unknown> {
+  success: boolean;
+  orderId?: string;
+  network?: string;
+  depositAddress?: string;
+  expectedAmount?: number;
+  inrAmount?: number;
+  rate?: number;
+  expiresAt?: number;
+  expiresInSeconds?: number;
+  message?: string;
+  error?: string;
+}
+
+async function usdtCreateOrder(request: Request) {
+  const body = await bodyOf(request);
+  const config = await readNode<JsonRecord>("config").catch(() => null);
+  if (!serviceIsOpen(config)) {
+    return json({ success: false, message: "Service is currently closed." }, 400);
+  }
+
+  const network = String(body['network'] ?? body['chain'] ?? "BEP20").toUpperCase().includes("TRC")
+    ? "TRC20"
+    : "BEP20";
+  const rate = Number(config?.['usdt_rate'] ?? body['rate'] ?? 0) || 92;
+  const requested = Number(body['amount'] ?? body['usdtAmount'] ?? body['expectedAmount'] ?? 0);
+  const inrInput = Number(body['inrAmount'] ?? 0);
+  const usdtAmount = requested > 0 ? requested : inrInput > 0 ? inrInput / rate : 0;
+  if (!Number.isFinite(usdtAmount) || usdtAmount <= 0) {
+    return json({ success: false, error: "A valid amount is required" }, 400);
+  }
+
+  const phone = String(body['phone'] ?? body['mobile'] ?? body['userId'] ?? "").replace(/[^0-9]/g, "");
+  const expectedAmount = Number(usdtAmount.toFixed(4));
+  const orderId = `USDT${Date.now()}${Math.floor(Math.random() * 900 + 100)}`;
+  const ttlSeconds = 900;
+  const expiresAt = Date.now() + ttlSeconds * 1000;
+  const depositAddress = MASTER_WALLETS[network] as string;
+
+  await patchRoot({
+    [`usdt_orders/${orderId}`]: {
+      order_id: orderId,
+      user_phone: phone,
+      network,
+      temp_address: depositAddress,
+      master_wallet: depositAddress,
+      expected_amount: expectedAmount,
+      received_amount: 0,
+      inr_credited: 0,
+      rate,
+      status: "PENDING",
+      tx_hash: null,
+      created_at: Date.now(),
+      expires_at: expiresAt,
+    },
+  });
+
+  const payload: UsdtCreateOrderResponse = {
+    success: true,
+    orderId,
+    network,
+    depositAddress,
+    expectedAmount,
+    inrAmount: Number((expectedAmount * rate).toFixed(2)),
+    rate,
+    expiresAt,
+    expiresInSeconds: ttlSeconds,
+  };
+  return json(payload);
+}
+
 async function usdtStatus(url: URL) {
+
   const orderId = String(url.searchParams.get("orderId") ?? url.searchParams.get("order_id") ?? "").trim();
   if (!orderId) return json({ success: false, error: "orderId is required" }, 400);
   const order = await readNode<JsonRecord>(`usdt_orders/${encodeURIComponent(orderId)}`);
@@ -294,6 +371,7 @@ export async function handleLivePaymentApi(request: Request): Promise<Response |
     if (request.method === "POST" && path === "/api/payments/initiate") return initiatePayment(request);
     if (request.method === "POST" && path === "/api/v1/orders/auto-create") return createAutoUtrOrder(request);
     if (request.method === "POST" && path === "/api/v1/orders/verify-utr") return verifyUtr(request);
+    if (request.method === "POST" && path === "/api/v1/usdt/create-order") return usdtCreateOrder(request);
     if (request.method === "GET" && path === "/api/v1/usdt/check-status") return usdtStatus(url);
     if (request.method === "GET" && path === "/api/v1/orders/available") return availableOrders();
     if (request.method === "GET" && path === "/api/verify_event_status") return verifyEventStatus(url);
